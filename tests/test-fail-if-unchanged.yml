@@ -1,0 +1,25 @@
+name: Test fail-if-unchanged - no changes present
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          files: |
+            README.md
+          fail-if-unchanged: "false"
+          fail-if-changed: "false"
+      - name: Assert files_changed is false and action did not fail
+        env:
+          FILES_CHANGED: ${{ steps.action.outputs.files_changed }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          if [ "$FILES_CHANGED" != "false" ]; then
+            echo "FAIL: expected files_changed to be 'false' but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS"
