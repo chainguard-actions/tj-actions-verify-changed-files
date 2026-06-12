@@ -1,0 +1,29 @@
+name: Test fail-if-changed with changed files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Modify a file to simulate changes
+        run: |
+          echo "some change" > changed-file.txt
+      - id: action
+        uses: .
+        with:
+          files: changed-file.txt
+          fail-if-changed: "false"
+          fail-if-unchanged: "false"
+      - name: Assert files_changed is true and action did not fail
+        env:
+          FILES_CHANGED: ${{ steps.action.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed to be 'true', got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: action completed without failing and detected changed files"

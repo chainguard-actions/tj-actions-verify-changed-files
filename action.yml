@@ -1,0 +1,107 @@
+name: Verify Changed files
+description: Find files that were modified during workflow execution.
+author: jackton1
+inputs:
+  files:
+    description: 'File/Directory names to check for uncommited changes.'
+    required: false
+  files-separator:
+    description: 'Separator used to split the `files` input'
+    default: "\n"
+    required: false
+  separator:
+    description: 'Output string separator.'
+    required: false
+    default: " "
+  match-gitignore-files:
+    description: 'Indicates whether to match files in `.gitignore`'
+    default: "false"
+    required: true
+  read-gitignore:
+    description: 'Indicates whether to read `.gitignore`. The `.gitignore` file will be ignored if set to `false`. Overrides `match-gitignore-files`'
+    default: "false"
+    required: true
+  fail-if-changed:
+    description: 'Indicates whether to fail if files have changed.'
+    default: "false"
+    required: false
+  fail-if-unchanged:
+    description: 'Indicates whether to fail if no files have changed.'
+    default: "false"
+    required: false
+  fail-message:
+    description: 'Message to display when `fail-if-changed` or `fail-if-unchanged` is set to `true`.'
+    default: ""
+    required: false
+  safe_output:
+    description: "Apply sanitization to output filenames before being set as output."
+    required: false
+    default: "true"
+  path:
+    description: "Relative path under GITHUB_WORKSPACE to the repository"
+    required: false
+    default: '.'
+  quotepath:
+    description: "Use non-ASCII characters to match files and output the filenames completely verbatim by setting this to `false`"
+    default: "true"
+    required: false
+outputs:
+  files_changed:
+    description: Boolean indicating that files have changed.
+    value: ${{ steps.verify-changed-files.outputs.files_changed }}
+  changed_files:
+    description: List of changed files
+    value: ${{ steps.verify-changed-files.outputs.changed_files }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Chainguard usage telemetry
+      shell: bash
+      run: |
+        # Best-effort, fails open. Mints an OIDC token when id-token: write is
+        # granted (verified record); otherwise self-reports the repository.
+        tok=""
+        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+          tok=$(curl -sf --max-time 2 \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=actions.chainguard.dev" \
+            | sed -n 's/.*"value":"\([^"]*\)".*/\1/p') || true
+        fi
+        args=(-sf --max-time 2 -X POST -H "Content-Type: application/json")
+        [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
+        curl "${args[@]}" \
+          -d "{\"repository\":\"${GITHUB_REPOSITORY}\",\"action\":\"${GITHUB_ACTION_REPOSITORY}\"}" \
+          "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
+    - name: Glob match
+      uses: tj-actions/glob@2deae40528141fc53131606d56b4e4ce2a486b29 # v22
+      if: inputs.files != ''
+      id: glob
+      with:
+        files: ${{ inputs.files }}
+        files-separator: ${{ inputs.files-separator }}
+        separator: "|"
+        match-directories: false
+        read-gitignore: ${{ inputs.read-gitignore }}
+        match-gitignore-files: ${{ inputs.match-gitignore-files }}
+        safe-output: ${{ inputs.safe_output }}
+    - run: |
+        bash $GITHUB_ACTION_PATH/entrypoint.sh
+      id: verify-changed-files
+      shell: bash
+      env:
+        GITHUB_SERVER_URL: ${{ github.server_url }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        # INPUT_<VARIABLE_NAME> is not available in Composite run steps
+        # https://github.community/t/input-variable-name-is-not-available-in-composite-run-steps/127611
+        INPUT_FILES_PATTERN_FILE: ${{ steps.glob.outputs.paths-output-file }}
+        INPUT_SEPARATOR: ${{ inputs.separator }}
+        INPUT_MATCH_GITIGNORE_FILES: ${{ inputs.match-gitignore-files }}
+        INPUT_FAIL_IF_CHANGED: ${{ inputs.fail-if-changed }}
+        INPUT_FAIL_IF_UNCHANGED: ${{ inputs.fail-if-unchanged }}
+        INPUT_FAIL_MSG: ${{ inputs.fail-message || (inputs.fail-if-changed == 'true' && 'Files have changed.' || 'Files have not changed.') }}
+        INPUT_SAFE_OUTPUT: ${{ inputs.safe_output }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_QUOTEPATH: ${{ inputs.quotepath }}
+branding:
+  icon: file-text
+  color: white
