@@ -1,0 +1,29 @@
+name: Test basic usage - no changes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - id: action
+        uses: .
+        with:
+          safe_output: "false"
+
+      - name: Assert files_changed is false
+        env:
+          FILES_CHANGED: ${{ steps.action.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "false" ]; then
+            echo "FAIL: expected files_changed to be 'false' but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: files_changed is false as expected"

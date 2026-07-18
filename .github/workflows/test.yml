@@ -1,0 +1,208 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+      - '**'
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: Run shellcheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: shellcheck
+        uses: reviewdog/action-shellcheck@57079a832290a049f49cee90984b072c870fb7d4 # v1.29
+  test:
+    name: Test verify-changed-files
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Test files has no changes
+        uses: ./
+        id: changed_files_not_expected
+        with:
+          files: |
+            test/*.txt
+            test/*.sql
+            test/**/*.txt
+            test/**/*.sql
+      - name: Display changed files
+        if: steps.changed_files_not_expected.outputs.files_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed_files_not_expected.outputs.changed_files }}
+        run: |
+          echo "Changed files (Not expected): $CHANGED_FILES"
+          exit 1
+      - name: Test dont fail if not changed
+        uses: ./
+        id: changed_files_not_expected_fail
+        with:
+          fail-if-changed: true
+          files: |
+            test/*.txt
+            test/*.sql
+            test/**/*.txt
+            test/**/*.sql
+      - name: Test fail if changed
+        uses: ./
+        id: unchanged_files_expected_fail
+        continue-on-error: true
+        with:
+          fail-if-unchanged: true
+          files: |
+            test/*.txt
+            test/*.sql
+            test/**/*.txt
+            test/**/*.sql
+      - name: Make changes
+        run: |
+          printf '%s\n' "323442" "424" >> test/new.txt
+          printf '%s\n' "323442" "424" >> test/new1.txt
+          printf '%s\n' "323442" "424" >> test/new2.txt
+          printf '%s\n' "323442" "424" >> "test/\$(whoami).txt"
+          printf '%s\n' "323442" "424" >> test/啊啊啊.txt
+        shell: bash
+      - name: Test test/new*.txt file has changes
+        uses: ./
+        id: changed_files_expected
+        with:
+          separator: '\n'
+          path: test
+          quotepath: false
+          files: |
+            *.{txt,sql}
+            **/*.{txt,sql}
+      - name: Display changed files
+        if: steps.changed_files_expected.outputs.files_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed_files_expected.outputs.changed_files }}
+        run: |
+          echo "Changed files: $CHANGED_FILES"
+      - name: Verify Changes to test/**.txt
+        if: |
+          (
+            steps.changed_files_expected.outputs.files_changed != 'true' ||
+            !contains(steps.changed_files_expected.outputs.changed_files, 'test/new.txt') ||
+            !contains(steps.changed_files_expected.outputs.changed_files, 'test/new1.txt') ||
+            !contains(steps.changed_files_expected.outputs.changed_files, 'test/new2.txt') ||
+            !contains(steps.changed_files_expected.outputs.changed_files, 'test/$\(whoami\).txt') ||
+            !contains(steps.changed_files_expected.outputs.changed_files, 'test/啊啊啊.txt')
+          )
+        run: |
+          echo "No Changes found or missing changed files: (Not expected)"
+          exit 1
+      - name: Test fail if changed
+        uses: ./
+        id: changed_files_expected_fail
+        continue-on-error: true
+        with:
+          fail-if-changed: true
+          files: |
+            test/*.txt
+            test/*.sql
+            test/**/*.txt
+            test/**/*.sql
+      - name: Test dont fail if changed and fail-if-unchanged is true
+        uses: ./
+        id: unchanged_files_not_expected_fail
+        with:
+          fail-if-unchanged: true
+          files: |
+            test/*.txt
+            test/*.sql
+            test/**/*.txt
+            test/**/*.sql
+      - name: Generate an unstaged file
+        run: |
+          echo "New changes" > unstaged.txt
+      - name: Test unstaged file has changes
+        uses: ./
+        id: changed_unstaged_files_expected
+        with:
+          files: |
+            unstaged.txt
+      - name: Display unstaged changed files
+        if: steps.changed_unstaged_files_expected.outputs.files_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed_unstaged_files_expected.outputs.changed_files }}
+        run: |
+          echo "Changed files: $CHANGED_FILES"
+      - name: Verify Changes to unstaged.txt
+        if: steps.changed_unstaged_files_expected.outputs.files_changed != 'true'
+        run: |
+          echo "No Changes found: (Not expected)"
+          exit 1
+      - name: Test unstaged file changes are ignored
+        uses: ./
+        id: changed_unstaged_files_not_expected
+        with:
+          files: |
+            !test/new.txt
+            !test/new1.txt
+            !test/new2.txt
+            !test/$(whoami).txt
+            !unstaged.txt
+      - name: Verify Changes to unstaged.txt are ignored
+        if: steps.changed_unstaged_files_not_expected.outputs.files_changed != 'false'
+        run: |
+          echo "Changes found: (Not expected)"
+          exit 1
+      - name: Test unstaged file has changes
+        uses: ./
+        id: changed_unstaged2_files_expected
+        with:
+          files: |
+            !test/new.txt
+            !test/new1.txt
+            !test/new2.txt
+            !test/$(whoami).txt
+            unstaged.txt
+      - name: Verify Changes to unstaged.txt are ignored
+        if: steps.changed_unstaged2_files_expected.outputs.files_changed != 'true'
+        run: |
+          echo "No Changes found: (Not expected)"
+          exit 1
+
+      - name: Delete test/new.txt without staging
+        run: |
+          rm test/new.txt
+
+      - name: Test deletion of test/new.txt
+        uses: ./
+        with:
+          path: test
+        id: deleted_file_test
+
+      - name: Show output
+        env:
+          CHANGED_FILES: ${{ steps.deleted_file_test.outputs.changed_files }}
+        run: |
+          echo "Changed files: $CHANGED_FILES"
+
+      - name: Display deleted file test result
+        if: "contains(steps.deleted_file_test.outputs.changed_files, 'new.txt')"
+        env:
+          CHANGED_FILES: ${{ steps.deleted_file_test.outputs.changed_files }}
+        run: |
+          echo "Deletion detected: $CHANGED_FILES"
+
+      - name: Verify Deletion of test/new.txt
+        if: "!contains(steps.deleted_file_test.outputs.changed_files, 'new.txt')"
+        run: |
+          echo "No Deletion detected: (Not expected)"
+          exit 1

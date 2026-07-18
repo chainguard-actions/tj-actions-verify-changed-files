@@ -1,0 +1,53 @@
+name: Test specific files input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Create a new file to simulate changes
+        run: |
+          echo "test modification" > test-changed-file.txt
+
+      - id: action-changed
+        uses: .
+        with:
+          files: test-changed-file.txt
+          safe_output: "false"
+
+      - name: Assert test-changed-file.txt is detected as changed
+        env:
+          FILES_CHANGED: ${{ steps.action-changed.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-changed.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed to be 'true' for test-changed-file.txt but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: test-changed-file.txt detected as changed"
+
+      - id: action-unchanged
+        uses: .
+        with:
+          files: tests/test-basic-no-changes.yml
+          safe_output: "false"
+
+      - name: Assert tests/test-basic-no-changes.yml is NOT detected as changed
+        env:
+          FILES_CHANGED: ${{ steps.action-unchanged.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-unchanged.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "false" ]; then
+            echo "FAIL: expected files_changed to be 'false' for tests/test-basic-no-changes.yml but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: tests/test-basic-no-changes.yml not detected as changed (as expected)"

@@ -1,0 +1,36 @@
+name: Test fail-if-changed when files are changed
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Create a new file to simulate changes
+        run: |
+          echo "test modification" > test-new-file.txt
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          fail-if-changed: "true"
+          fail-message: "Files have changed unexpectedly."
+          safe_output: "false"
+
+      - name: Assert action failed due to changed files
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          FILES_CHANGED: ${{ steps.action.outputs.files_changed }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "files_changed: $FILES_CHANGED"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail when fail-if-changed=true and files are changed, but outcome was '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action correctly failed when files changed and fail-if-changed=true"

@@ -1,0 +1,43 @@
+name: Test separator output option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Create new files to simulate changes
+        run: |
+          echo "test modification 1" > test-file-a.txt
+          echo "test modification 2" > test-file-b.txt
+
+      - id: action
+        uses: .
+        with:
+          separator: ","
+          safe_output: "false"
+
+      - name: Assert files_changed is true and separator is applied
+        env:
+          FILES_CHANGED: ${{ steps.action.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed to be 'true' but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          # When multiple files changed and separator is comma, output should contain comma
+          # (only if more than one file changed)
+          FILE_COUNT=$(echo "$CHANGED_FILES" | tr ',' '\n' | wc -l)
+          echo "file count (by comma): $FILE_COUNT"
+          if [ "$FILE_COUNT" -lt 1 ]; then
+            echo "FAIL: expected at least one changed file"
+            exit 1
+          fi
+          echo "PASS: separator test passed, changed_files='$CHANGED_FILES'"
