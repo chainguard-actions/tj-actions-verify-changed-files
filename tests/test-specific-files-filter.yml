@@ -1,0 +1,63 @@
+name: Test specific files filter
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git and commit any pending changes to start clean
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git add -A
+          git diff --cached --quiet || git commit -m "chore: commit test fixtures for clean state"
+
+      - name: Modify a file that is NOT in the filter
+        run: |
+          echo "test modification" >> README.md
+
+      - name: Run action filtering only for a specific file that was NOT changed
+        id: action-no-match
+        uses: .
+        with:
+          files: |
+            some-nonexistent-file.txt
+
+      - name: Assert files_changed is false when filter does not match
+        env:
+          FILES_CHANGED: ${{ steps.action-no-match.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-no-match.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "false" ]; then
+            echo "FAIL: expected files_changed=false (filter should not match README.md) but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: filter correctly excluded unrelated changes"
+
+      - name: Run action filtering for the file that WAS changed
+        id: action-match
+        uses: .
+        with:
+          files: |
+            README.md
+
+      - name: Assert files_changed is true when filter matches
+        env:
+          FILES_CHANGED: ${{ steps.action-match.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-match.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed=true (README.md was modified) but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "FAIL: expected changed_files to be non-empty"
+            exit 1
+          fi
+          echo "PASS: filter correctly matched changed file: $CHANGED_FILES"

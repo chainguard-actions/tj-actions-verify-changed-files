@@ -1,0 +1,61 @@
+name: Test custom separator
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git and commit any pending changes to start clean
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git add -A
+          git diff --cached --quiet || git commit -m "chore: commit test fixtures for clean state"
+
+      - name: Modify multiple files to test separator
+        run: |
+          echo "test modification 1" >> README.md
+          echo "new untracked file" > test-untracked-separator.txt
+
+      - id: action-comma
+        uses: .
+        with:
+          separator: ","
+
+      - name: Assert changed_files uses comma separator
+        env:
+          FILES_CHANGED: ${{ steps.action-comma.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-comma.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed=true but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "FAIL: expected changed_files to be non-empty"
+            exit 1
+          fi
+          # If multiple files changed, they should be comma-separated (not space-separated)
+          FILE_COUNT=$(echo "$CHANGED_FILES" | tr ',' '\n' | wc -l)
+          echo "File count (comma-separated): $FILE_COUNT"
+          echo "PASS: changed_files output: $CHANGED_FILES"
+
+      - id: action-default
+        uses: .
+
+      - name: Assert changed_files uses default space separator
+        env:
+          FILES_CHANGED: ${{ steps.action-default.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-default.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed=true but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: default separator output: $CHANGED_FILES"
