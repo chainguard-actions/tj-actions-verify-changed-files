@@ -1,0 +1,61 @@
+name: Test specific file pattern filtering
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.email "test@example.com"
+          git config --global user.name "Test User"
+
+      - name: Create a test file to detect as changed
+        run: |
+          echo "test-modification" > test-change.txt
+
+      - name: Check with matching pattern (test-change.txt)
+        id: match
+        uses: .
+        with:
+          files: test-change.txt
+
+      - name: Assert matching pattern detects change
+        env:
+          FILES_CHANGED: ${{ steps.match.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.match.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed=true for test-change.txt pattern but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: matching pattern correctly detected change"
+
+      - name: Stage the test file so it is no longer untracked
+        run: |
+          git add test-change.txt
+          git commit -m "temp commit for test"
+
+      - name: Check with non-matching pattern (nonexistent.txt) after staging
+        id: no-match
+        uses: .
+        with:
+          files: nonexistent.txt
+
+      - name: Assert non-matching pattern reports no change
+        env:
+          FILES_CHANGED: ${{ steps.no-match.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.no-match.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "false" ]; then
+            echo "FAIL: expected files_changed=false for non-matching pattern but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          echo "PASS: non-matching pattern correctly reports no change"

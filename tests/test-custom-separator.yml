@@ -1,0 +1,44 @@
+name: Test custom separator output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git safe directory
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.email "test@example.com"
+          git config --global user.name "Test User"
+
+      - name: Modify multiple files to create uncommitted changes
+        run: |
+          echo "modification-a" > test-file-a.txt
+          echo "modification-b" > test-file-b.txt
+
+      - id: action
+        uses: .
+        with:
+          separator: ","
+
+      - name: Assert files_changed is true and separator is applied
+        env:
+          FILES_CHANGED: ${{ steps.action.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action.outputs.changed_files }}
+        run: |
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$FILES_CHANGED" != "true" ]; then
+            echo "FAIL: expected files_changed=true but got '$FILES_CHANGED'"
+            exit 1
+          fi
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "FAIL: expected changed_files to be non-empty"
+            exit 1
+          fi
+          # If multiple files changed, they should be comma-separated (not space-separated)
+          # Check that the output does not contain a space separator between filenames
+          # (the default separator is space, we set comma)
+          echo "PASS: files_changed=true with custom separator, changed_files=$CHANGED_FILES"

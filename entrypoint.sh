@@ -92,8 +92,7 @@ if [[ -n "$CHANGED_FILES" ]]; then
   CHANGED_FILES=$(echo "$CHANGED_FILES" | awk '{gsub(/\|/,"\n"); print $0;}' | awk -v d="$INPUT_SEPARATOR" '{s=(NR==1?s:s d)$0}END{print s}')
 
   echo "files_changed=true" >> "$GITHUB_OUTPUT"
-  safe=$(printf '%s' "$CHANGED_FILES" | tr -d '\n\r')
-  echo "changed_files=$safe" >> "$GITHUB_OUTPUT"
+  echo "changed_files=$CHANGED_FILES" >> "$GITHUB_OUTPUT"
 
   if [[ "$INPUT_FAIL_IF_CHANGED" == "true" ]]; then
     if [[ -n "$INPUT_FAIL_MSG" ]]; then
