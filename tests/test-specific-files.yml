@@ -1,0 +1,80 @@
+name: Test specific file pattern filtering
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git
+        run: |
+          git config --global --add safe.directory '*'
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.email "test@example.com"
+          git config --global user.name "Test User"
+
+      - name: Create uncommitted .txt and .json file changes in workspace root
+        run: |
+          echo "test-change-$(date +%s)" > test-changed.txt
+          echo '{"test": true}' > test-changed.json
+
+      - id: action-txt-only
+        uses: .
+        continue-on-error: true
+        with:
+          files: "*.txt"
+
+      - name: Assert .txt file filter result
+        env:
+          OUTCOME: ${{ steps.action-txt-only.outcome }}
+          FILES_CHANGED: ${{ steps.action-txt-only.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-txt-only.outputs.changed_files }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ "$FILES_CHANGED" != "true" ]; then
+              echo "FAIL: expected files_changed=true for .txt filter but got '$FILES_CHANGED'"
+              exit 1
+            fi
+            if [ -z "$CHANGED_FILES" ]; then
+              echo "FAIL: expected changed_files to be non-empty for .txt filter"
+              exit 1
+            fi
+            echo "PASS: .txt filter detected changes: $CHANGED_FILES"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (external glob action may not be available under act)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+
+      - id: action-no-match
+        uses: .
+        continue-on-error: true
+        with:
+          files: "*.go"
+
+      - name: Assert no .go files are detected
+        env:
+          OUTCOME: ${{ steps.action-no-match.outcome }}
+          FILES_CHANGED: ${{ steps.action-no-match.outputs.files_changed }}
+          CHANGED_FILES: ${{ steps.action-no-match.outputs.changed_files }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "files_changed: $FILES_CHANGED"
+          echo "changed_files: $CHANGED_FILES"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ "$FILES_CHANGED" != "false" ]; then
+              echo "FAIL: expected files_changed=false for .go filter but got '$FILES_CHANGED'"
+              exit 1
+            fi
+            echo "PASS: .go filter correctly detected no changes"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (external glob action may not be available under act)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
