@@ -73,7 +73,7 @@ runs:
           -d "{\"repository\":\"${GITHUB_REPOSITORY}\",\"action\":\"${GITHUB_ACTION_REPOSITORY}\"}" \
           "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
     - name: Glob match
-      uses: tj-actions/glob@2deae40528141fc53131606d56b4e4ce2a486b29 # v22.0.2
+      uses: chainguard-actions/tj-actions-glob@9eecb19c948f7ab52bee9f5e7ae4a598f4f0f081 # v22.0.2
       if: inputs.files != ''
       id: glob
       with:
