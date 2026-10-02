@@ -14,7 +14,7 @@ git config --global core.quotepath "$INPUT_QUOTEPATH"
 
 OS=$(uname -s)
 
-if [[ -n "$INPUT_PATH" ]]; then
+if [[ -n $INPUT_PATH ]]; then
   if [[ "$OS" == "NT"* ]] || [[ "$OS" == "MINGW"* ]] || [[ "$OS" == *"MSYS"* ]]; then
     REPO_DIR="$GITHUB_WORKSPACE\\$INPUT_PATH"
   else

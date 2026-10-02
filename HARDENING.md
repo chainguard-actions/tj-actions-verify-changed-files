@@ -10,35 +10,26 @@
 
 **Harden Agent Version:** `2`
 
-Action **tj-actions--verify-changed-files/v20.0.3** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
+Action **tj-actions--verify-changed-files/v20.0.3** was hardened automatically. 1 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### github-env-injection (severity: high)
 
-In entrypoint.sh, the variable CHANGED_FILES — assembled from git-tracked filenames joined with $INPUT_SEPARATOR (which is sourced from inputs.separator, a caller-controlled input) — is written directly to $GITHUB_OUTPUT without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). A crafted filename or separator value containing embedded newlines could inject additional key=value pairs into $GITHUB_OUTPUT, potentially overwriting other step outputs. The offending line is: `echo "changed_files=$CHANGED_FILES" >> "$GITHUB_OUTPUT"`. No `tr -d` or `printf '%s'` sanitization exists anywhere in the script.
+In entrypoint.sh, the variable CHANGED_FILES is written to $GITHUB_OUTPUT without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). CHANGED_FILES is constructed using INPUT_SEPARATOR (mapped from the caller-controlled input `inputs.separator` via the env: block in action.yml) as an awk field delimiter. Because INPUT_SEPARATOR is untrusted and can contain newline characters, an attacker can inject arbitrary key=value pairs into $GITHUB_OUTPUT by supplying a newline-containing separator. The offending line is: `echo "changed_files=$CHANGED_FILES" >> "$GITHUB_OUTPUT"`
 
 Locations:
 
-- `entrypoint.sh:95`
-
-### script-injection (severity: high)
-
-Rule (b) violation: In entrypoint.sh, the env var $INPUT_PATH (sourced from inputs.path via the env: block in action.yml) is used unquoted in the bash conditional `if [[ -n $INPUT_PATH ]]; then`. Although bash's [[ ]] construct prevents word splitting, glob/pathname expansion still occurs on unquoted variables, allowing a caller-supplied path value containing glob metacharacters (e.g. `*`, `?`, `[`) to expand unexpectedly. The variable should be double-quoted: `if [[ -n "$INPUT_PATH" ]]; then`.
-
-Locations:
-
-- `entrypoint.sh:17`
+- `entrypoint.sh:97`
+- `action.yml:64`
 
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** script-injection, github-env-injection
+**Fixes applied:** github-env-injection
 
 **Notes:**
 
-Fixed two issues in hardened/action/entrypoint.sh:
-1. script-injection (line 17): Quoted `$INPUT_PATH` in `[[ -n "$INPUT_PATH" ]]` to prevent glob/pathname expansion from a caller-supplied path value containing metacharacters.
-2. github-env-injection (line 95): Added `safe_changed_files=$(printf '%s' "$CHANGED_FILES" | tr -d '\n\r')` before writing to $GITHUB_OUTPUT, so embedded newlines in filenames or the caller-controlled separator cannot inject additional key=value pairs into the output.
+Fixed entrypoint.sh line 97: Added sanitization of CHANGED_FILES before writing to $GITHUB_OUTPUT. The value is now passed through `printf '%s' "$CHANGED_FILES" | tr -d '\n\r'` to strip newline and carriage return characters before being written as `changed_files=...` to $GITHUB_OUTPUT. This prevents an attacker from injecting arbitrary key=value pairs into $GITHUB_OUTPUT by supplying a newline-containing separator via inputs.separator.
 
