@@ -45,6 +45,7 @@ inputs:
     description: "Use non-ASCII characters to match files and output the filenames completely verbatim by setting this to `false`"
     default: "true"
     required: false
+
 outputs:
   files_changed:
     description: Boolean indicating that files have changed.
@@ -52,6 +53,7 @@ outputs:
   changed_files:
     description: List of changed files
     value: ${{ steps.verify-changed-files.outputs.changed_files }}
+
 runs:
   using: 'composite'
   steps:
@@ -85,7 +87,7 @@ runs:
         match-gitignore-files: ${{ inputs.match-gitignore-files }}
         safe-output: ${{ inputs.safe_output }}
     - run: |
-        bash $GITHUB_ACTION_PATH/entrypoint.sh
+        bash "$GITHUB_ACTION_PATH/entrypoint.sh"
       id: verify-changed-files
       shell: bash
       env:
